@@ -6,42 +6,44 @@ import ca.yorku.cmg.lob.stockexchange.events.NewsBoard;
 import ca.yorku.cmg.lob.trader.Trader;
 
 /**
- * A trading agent that receives news and delegates reaction to a strategy.
+ * A trading agent that can both:
+ *  - poll the NewsBoard (pull model, used in pollingTest), and
+ *  - receive pushed events as an observer (pushTest).
+ *
+ * The actual reaction is delegated to an ITradingStrategy.
  */
-public abstract class TradingAgent {
+public abstract class TradingAgent implements INewsObserver {
 
     protected Trader t;
     protected StockExchange exc;
     protected NewsBoard news;
 
-    // Strategy
     protected ITradingStrategy strategy;
 
     /**
-     * Constructor.
+     * Constructor
      */
-    public TradingAgent(Trader t,
-                        StockExchange e,
-                        NewsBoard n,
-                        ITradingStrategy strategy) {
+    public TradingAgent(Trader t, StockExchange e, NewsBoard n, ITradingStrategy strategy) {
         this.t = t;
         this.exc = e;
         this.news = n;
         this.strategy = strategy;
-    }
 
-    public void setStrategy(ITradingStrategy strategy) {
-        this.strategy = strategy;
+        // Register this agent as an observer for push model
+        n.register(this);
     }
 
     /**
-     * Called as time advances to {@code time}.
-     * Agent polls the NewsBoard for events (pull model).
+     * Called by StockExchangeTest in pollingTest().
+     * Still uses the original pull-based behaviour.
      */
     public void timeAdvancedTo(long time) {
         pollForEvents(time);
     }
 
+    /**
+     * Pull model: ask the NewsBoard if there is an event at this time.
+     */
     private void pollForEvents(long time) {
         Event e = news.getEventAt(time);
         if (e != null) {
@@ -50,8 +52,8 @@ public abstract class TradingAgent {
     }
 
     /**
-     * Examine if an event is relevant for the Agent
-     * (i.e., if the Agent has a position in that security).
+     * Common logic to check if this agent has a position in the event's security
+     * and then delegate to the strategy.
      */
     private void examineEvent(Event e) {
         int positionInSecurity =
@@ -66,11 +68,20 @@ public abstract class TradingAgent {
     }
 
     /**
-     * Delegates the reaction to the configured strategy.
+     * Strategy hook – by default we just delegate to ITradingStrategy.
      */
     protected void actOnEvent(Event e, int pos, int price) {
         if (strategy != null) {
             strategy.actOnEvent(e, pos, price);
         }
+    }
+
+    /**
+     * Observer callback – used in the push model (pushTest()).
+     * NewsBoard calls this directly when an event happens.
+     */
+    @Override
+    public void update(Event e) {
+        examineEvent(e);
     }
 }
